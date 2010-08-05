@@ -1,0 +1,583 @@
+<!--
+ * Copyright 2009, Google Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following disclaimer
+ * in the documentation and/or other materials provided with the
+ * distribution.
+ *     * Neither the name of Google Inc. nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+  "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>WebGL ImageSphere</title>
+<style>
+body {
+  width: 100%;
+  height: 100%;
+  border: 0px;
+  padding: 0px;
+  margin: 0px;
+  background-color: red;
+}
+CANVAS {
+  background-color: gray;
+}
+#uiContainer {
+  z-index: 2;
+  padding: 1em;
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  width: 250px;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  font-size: xx-small;
+}
+#ui {
+}
+#fpsContainer {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  color: white;
+  font-family: sans-serif;
+}
+</style>
+<link type="text/css" href="../jquery-ui-1.8.2.custom/css/ui-lightness/jquery-ui-1.8.2.custom.css" rel="stylesheet" />
+<script type="text/javascript" src="../jquery-ui-1.8.2.custom/js/jquery-1.4.2.min.js"></script>
+<script type="text/javascript" src="../jquery-ui-1.8.2.custom/js/jquery-ui-1.8.2.custom.min.js"></script>
+<script type="text/javascript" src="../js/webgl-test-utils.js"></script>
+<script type="text/javascript" src="../js/webgl-debug.js"></script>
+<script type="text/javascript" src="../tdl/base.js"></script>
+<script type="text/javascript">
+tdl.require('tdl.buffers');
+tdl.require('tdl.fast');
+tdl.require('tdl.fps');
+tdl.require('tdl.math');
+tdl.require('tdl.models');
+tdl.require('tdl.primitives');
+tdl.require('tdl.programs');
+tdl.require('tdl.textures');
+
+// globals
+var gl;                   // the gl context.
+var wu = WebGLTestUtils;  // some webgl utils
+var wd = WebGLDebugUtils; // more webgl utils
+var canvas;               // the canvas
+var math;                 // the math lib.
+var fast;                 // the fast math lib.
+var g_fpsTimer;           // object to measure frames per second;
+var g_logGLCalls = true;  // whether or not to log webgl calls
+var g_debug = false;      // whether or not to debug.
+var g_drawOnce = false;   // draw just one frame.
+var g_canvas2d;           // A global canvas to create textures
+var g_ctx2d;              // A global canvas 2d context to create textures
+
+// We'll maintain a grid of images this size
+// and scroll across them. When one goes off the left it comes on the right.
+var g_imagesAcrossSphere = 5;
+var g_imagesDownSphere = 5;
+var g_imagesAcrossGrid = 10;
+var g_imagesDownGrid = 10;
+var g_textures = [];
+
+//g_drawOnce = true;
+//g_debug = true;
+
+var g = {
+  globals: {},
+  imagePlaneConst:{}};
+
+var g_ui = [
+  { obj: 'globals',         name: 'hScrollSpeed', value: 0.3,  max:  1  },
+  { obj: 'globals',         name: 'vScrollSpeed', value: 0.1,  max:  1  },
+  { obj: 'globals',         name: 'imageWidth',   value: 1.0,  max:  5  },
+  { obj: 'globals',         name: 'imageHeight',  value: 1.0,  max:  5  },
+  { obj: 'globals',         name: 'imageSpacing', value: 1.1,  max:  5  },
+  { obj: 'globals',         name: 'eyeRadius',    value: 5,    max:  10 },
+  { obj: 'imagePlaneConst', name: 'bendRadius',   value: 2.4,  max:  10 },
+  { obj: 'imagePlaneConst', name: 'bendAmount',   value: 0.42, max:  2 }];
+
+function ValidateNoneOfTheArgsAreUndefined(functionName, args) {
+  for (var ii = 0; ii < args.length; ++ii) {
+    if (args[ii] === undefined) {
+      console.error("undefined passed to gl." + functionName + "(" +
+                wd.glFunctionArgsToString(functionName, args) + ")");
+    }
+  }
+}
+
+function Log(msg) {
+  if (g_logGLCalls) {
+    wu.log(msg);
+  }
+}
+
+function LogGLCall(functionName, args) {
+  if (g_logGLCalls) {
+    ValidateNoneOfTheArgsAreUndefined(functionName, args)
+    console.log("gl." + functionName + "(" +
+                wd.glFunctionArgsToString(functionName, args) + ")");
+  }
+}
+
+function createProgramFromTags(vertexTagId, fragmentTagId) {
+  return tdl.programs.loadProgram(
+      document.getElementById(vertexTagId).text,
+      document.getElementById(fragmentTagId).text);
+}
+
+/**
+ * Sets up a imagePlane
+ */
+function setupImagePlane() {
+  var textures = {
+      diffuseSampler: tdl.textures.loadTexture([128,128,128,255])};
+  var program = createProgramFromTags(
+      'imageSphereVertexShader',
+      'imageSphereFragmentShader');
+//  var arrays = tdl.primitives.createCube(1);
+  var arrays = tdl.primitives.createPlane(1,1,10,10);
+  tdl.primitives.reorient(arrays,
+      [[1, 0, 0, 0],
+       [0, 0, 1, 0],
+       [0, -1, 0, 0],
+       [0, 0, 0, 1]]);
+  return new tdl.models.Model(program, arrays, textures);
+}
+
+function hack() {
+
+ImgTexture = function() {
+	tdl.textures.Texture.call(this, gl.TEXTURE_2D);
+  gl.bindTexture(gl.TEXTURE_2D, this.texture);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 256, 256, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  this.setParameter(gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  this.setParameter(gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  this.setParameter(gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  this.setParameter(gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+}
+
+tdl.base.inherit(ImgTexture, tdl.textures.Texture);
+
+ImgTexture.prototype.load = function(imgUrl, msg) {
+  var img = new Image();
+  var that = this;
+	img.onload = function() {
+    that.uploadTexture();
+  }
+	this.img = img;
+	this.msg = msg;
+	img.src = imgUrl;
+};
+
+ImgTexture.prototype.uploadTexture = function() {
+  var img = this.img;
+  var msg = this.msg;
+	g_ctx2d.clearRect(0, 0, 256, 256);
+  g_ctx2d.drawImage(img, 0, 0, 256, img.height * 256 / img.width);
+	g_ctx2d.clearRect(0, 192, 256, 64);
+	g_ctx2d.font = "20px sans-serif";
+	g_ctx2d.fillStyle = "rgb(255,255,255)";
+	g_ctx2d.fillText(msg.substr(0, Math.floor(msg.length / 2)), 10, 220);
+	g_ctx2d.fillText(msg.substr(Math.floor(msg.length / 2)), 10, 240);
+	gl.bindTexture(gl.TEXTURE_2D, this.texture);
+	gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, g_canvas2d);
+};
+
+ImgTexture.prototype.bindToUnit = function(unit) {
+  gl.activeTexture(gl.TEXTURE0 + unit);
+  gl.bindTexture(gl.TEXTURE_2D, this.texture);
+};
+
+}
+
+function initialize() {
+  math = tdl.math;
+  fast = tdl.fast;
+  canvas = document.getElementById("canvas");
+  g_fpsTimer = new tdl.fps.FPSTimer();
+
+  hack();
+
+  // Create a canvas 2d for making textures with text.
+  g_canvas2d = document.createElement('canvas');
+	g_canvas2d.width = 256;
+	g_canvas2d.height = 256;
+	g_ctx2d = g_canvas2d.getContext("2d");
+
+  gl = wu.create3DContext(canvas);
+  if (g_debug) {
+    gl = wd.makeDebugContext(gl, undefined, LogGLCall);
+  }
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, gl.TRUE);
+
+  var headlines = [
+    "China defends dealings with Iran after US pressure",
+    "Software fix coming for iOS vulnerabilities",
+    "Study sees linking of specific genes to coronaries",
+    "Intel agrees to marketing restrictions in FTC deal",
+    "Hefty weight gain in pregnancy causes big babies",
+    "How will Google Wave be reincarnated?",
+    "New Criteria for Diagnosing Alzheimer's Coming",
+    "Microsoft, Salesforce.com Settle Patent-Infringement Suits",
+    "Promising Results Reported for Cholesterol and Hepatitis C Drugs",
+    "BlackBerry Torch 9800 (AT&T)",
+    "Health Buzz: Dietary Supplements Often Contain Harmful Ingredients",
+    "200000 Android smartphones activated per day",
+    "Man Alerted to His Diabetes When His Terrier Eats His Infected Toe",
+    "Dell Inspiron M101z",
+    "More States Growing Obese: CDC",
+    "Solar Storm Causes Fantastic Light Show",
+    "For Hitchens brothers, rift starts with religion",
+    "FCC draws fire over talks with Internet, telecom giants on A'net neutrality'",
+    "Epilepsy Drugs Don't Raise Suicide Risk, Study Shows",
+    "Despite Death Grip, Most iPhone 4 Users 'Very Satisfied'",
+    "Why women are attracted to a man dressed in red"];
+
+  var images = [
+    "assets/test_00.jpg",
+    "assets/test_01.jpg",
+    "assets/test_02.jpg",
+    "assets/test_03.jpg",
+    "assets/test_04.jpg",
+    "assets/test_05.jpg",
+    "assets/test_06.jpg",
+    "assets/test_07.jpg",
+    "assets/test_08.jpg",
+    "assets/test_09.jpg",
+    "assets/test_10.jpg",
+    "assets/test_11.jpg",
+    "assets/test_12.jpg",
+    "assets/test_13.jpg",
+    "assets/test_14.jpg",
+    "assets/test_15.jpg",
+    "assets/test_16.jpg",
+    "assets/test_17.jpg",
+    "assets/test_18.jpg",
+    "assets/test_19.jpg",
+    "assets/test_20.jpg"]
+
+  // make a bunch of textures.
+  // What to do if we run out of memory?
+  for (var ii = 0; ii < g_imagesDownGrid; ++ii) {
+    var textures = [];
+    for (var jj = 0; jj < g_imagesAcrossGrid; ++jj) {
+      var imgTexture = new ImgTexture();
+      textures.push(imgTexture);
+			imgTexture.load(
+          images[math.randomInt(images.length)],
+          headlines[math.randomInt(headlines.length)]);
+    }
+    g_textures.push(textures);
+  }
+
+  Log("--Setup ImagePlane---------------------------------------");
+  var imagePlane = setupImagePlane();
+
+  var then = 0.0;
+  var clock = 0.0;
+  var fpsElem = document.getElementById("fps");
+
+  var projection = new Float32Array(16);
+  var view = new Float32Array(16);
+  var world = new Float32Array(16);
+  var worldInverse = new Float32Array(16);
+  var worldInverseTranspose = new Float32Array(16);
+  var viewProjection = new Float32Array(16);
+  var worldViewProjection = new Float32Array(16);
+  var viewInverse = new Float32Array(16);
+  var viewProjectionInverse = new Float32Array(16);
+  var eyePosition = new Float32Array(3);
+  var target = new Float32Array(3);
+  var up = new Float32Array([0,1,0]);
+  var lightWorldPos = new Float32Array(3);
+  var v3t0 = new Float32Array(3);
+  var v3t1 = new Float32Array(3);
+  var v3t2 = new Float32Array(3);
+  var v3t3 = new Float32Array(3);
+  var m4t0 = new Float32Array(16);
+  var m4t1 = new Float32Array(16);
+  var m4t2 = new Float32Array(16);
+  var m4t3 = new Float32Array(16);
+  var zero4 = new Float32Array(4);
+  var one4 = new Float32Array([1,1,1,1]);
+
+  // Modern building uniforms.
+  g.imagePlaneConst.viewInverse = viewInverse;
+  g.imagePlaneConst.lightWorldPos = lightWorldPos;
+  g.imagePlaneConst.viewProjection = viewProjection;
+  var imagePlanePer = {
+    world: world,
+    worldViewProjection: worldViewProjection,
+    worldInverse: worldInverse,
+    worldInverseTranspose: worldInverseTranspose};
+
+  var scrollX = 0;
+  var scrollY = 0;
+
+  var frameCount = 0;
+  var intervalId = setInterval(render, 1000.0 / 70.0);
+  function render() {
+    ++frameCount;
+    if (g_drawOnce) {
+      clearInterval(intervalId);
+    }
+    var now = (new Date()).getTime() * 0.001;
+    var elapsedTime;
+    if(then == 0.0) {
+      elapsedTime = 0.0;
+    } else {
+      elapsedTime = now - then;
+    }
+    then = now;
+
+    g_fpsTimer.update(elapsedTime);
+    fps.innerHTML = g_fpsTimer.averageFPS;
+
+    clock += elapsedTime;
+    eyePosition[0] = 0;
+    eyePosition[1] = 0;
+    eyePosition[2] = g.globals.eyeRadius;
+
+    gl.colorMask(true, true, true, true);
+    gl.depthMask(true);
+    gl.clearColor(0,0,0,0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+
+    fast.matrix4.perspective(
+        projection,
+        math.degToRad(60),
+        canvas.clientWidth / canvas.clientHeight,
+        1,
+        5000);
+    fast.matrix4.lookAt(
+        view,
+        eyePosition,
+        target,
+        up);
+    fast.matrix4.mul(viewProjection, view, projection);
+    fast.matrix4.inverse(viewInverse, view);
+    fast.matrix4.inverse(viewProjectionInverse, viewProjection);
+
+    fast.matrix4.getAxis(v3t0, viewInverse, 0); // x
+    fast.matrix4.getAxis(v3t1, viewInverse, 1); // y;
+    fast.matrix4.getAxis(v3t2, viewInverse, 2); // z;
+    fast.mulScalarVector(v3t0, 0, v3t0);
+    fast.mulScalarVector(v3t1, 0, v3t1);
+    fast.mulScalarVector(v3t2, 0, v3t2);
+    fast.addVector(lightWorldPos, eyePosition, v3t0);
+    fast.addVector(lightWorldPos, lightWorldPos, v3t1);
+    fast.addVector(lightWorldPos, lightWorldPos, v3t2);
+
+//      view: view,
+//      projection: projection,
+//      viewProjection: viewProjection,
+
+    Log("--Draw Images---------------------------------------");
+    imagePlane.drawPrep(g.imagePlaneConst);
+		scrollX = clock * -g.globals.hScrollSpeed;
+		scrollY = clock * -g.globals.vScrollSpeed;
+    var gridXOff = Math.floor(g_imagesAcrossSphere * -0.5);
+    var gridYOff = Math.floor(g_imagesDownSphere * -0.5);
+    var xOff = tdl.math.modClamp(scrollX % 1, 1);
+    var yOff = tdl.math.modClamp(scrollY % 1, 1);
+    var texXBase = tdl.math.modClamp(Math.floor(-scrollX), g_imagesAcrossGrid);
+    var texYBase = tdl.math.modClamp(Math.floor(-scrollY), g_imagesDownGrid);
+    var texturesPer = {};
+    for (var yy = 0; yy <= g_imagesDownSphere; ++yy) {
+      var texRowIndex = tdl.math.modClamp(texYBase + yy, g_imagesDownGrid);
+      var textures = g_textures[texRowIndex];
+      for (var xx = 0; xx <= g_imagesAcrossSphere; ++xx) {
+        var texColIndex = tdl.math.modClamp(texXBase + xx, g_imagesAcrossGrid);
+        texturesPer.diffuseSampler = textures[texColIndex];
+				fast.matrix4.mul(
+            world,
+						fast.matrix4.scaling(
+                m4t0,
+                [g.globals.imageWidth,
+                 g.globals.imageHeight,
+                 1]),
+            fast.matrix4.translation(
+                m4t1,
+                [(gridXOff + xx + xOff) * g.globals.imageWidth * g.globals.imageSpacing,
+                 (gridYOff + yy + yOff) * g.globals.imageHeight * g.globals.imageSpacing,
+                 0]));
+        fast.matrix4.mul(worldViewProjection, world, viewProjection);
+        fast.matrix4.inverse(worldInverse, world);
+        fast.matrix4.transpose(worldInverseTranspose, worldInverse);
+        imagePlane.draw(imagePlanePer, texturesPer);
+      }
+    }
+
+    // Set the alpha to 255.
+    gl.colorMask(false, false, false, true);
+    gl.clearColor(0,0,0,1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // turn off logging after 1 frame.
+    g_logGLCalls = false;
+  }
+}
+
+var g_event;
+var g_ui;
+
+function getParamId(id) {
+  return id.substr(6).replace(/(\w)/, function(m) {return m.toLowerCase() });
+}
+
+function setParam(event, ui, obj) {
+  var id = event.target.id;
+  var value = ui.value / 1000;
+  console.log(id + ": " + value);
+  obj[id] = value;
+}
+
+function getUIValue(obj, id) {
+  return obj[id] * 1000;
+}
+
+function setupSlider($, elem, ui, obj) {
+  var labelDiv = document.createElement('div');
+  labelDiv.appendChild(document.createTextNode(ui.name));
+  var sliderDiv = document.createElement('div');
+  sliderDiv.id = ui.name;
+  elem.appendChild(labelDiv);
+  elem.appendChild(sliderDiv);
+  $(sliderDiv).slider({
+    range: false,
+    step: 1,
+    max: ui.max * 1000,
+    value: getUIValue(obj, ui.name),
+    slide: function(event, ui) { setParam(event, ui, obj); }
+  });
+}
+
+$(function(){
+  var uiElem = document.getElementById('ui');
+  for (var ii = 0; ii < g_ui.length; ++ii) {
+    var ui = g_ui[ii];
+    var obj = g[ui.obj];
+    obj[ui.name] = ui.value;
+    var div = document.createElement('div');
+    setupSlider($, div, ui, obj);
+    uiElem.appendChild(div);
+  }
+
+  initialize();
+});
+</script>
+</head>
+<body>
+<div id="fpsContainer">
+  <div class="fps">fps: <span id="fps"></div>
+  <div id="status"></div>
+</div>
+<div id="uiContainer">
+<div id="ui"></div>
+</div>
+<canvas id="canvas" width="1024" height="1024" style="width: 100%; height: 100%;"></canvas>
+</body>
+<!--- imageSphere -->
+<script id="imageSphereVertexShader" type="text/something-not-javascript">
+uniform mat4 viewProjection;
+uniform vec3 lightWorldPos;
+uniform mat4 world;
+uniform mat4 viewInverse;
+uniform mat4 worldInverseTranspose;
+uniform float bendAmount;
+uniform float bendRadius;
+attribute vec4 position;
+attribute vec3 normal;
+attribute vec2 texCoord;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+varying vec3 v_normal;
+varying vec3 v_surfaceToLight;
+varying vec3 v_surfaceToView;
+void main() {
+  v_texCoord = texCoord;
+  vec4 wp = world * position;
+  float longitude = wp.x * bendAmount + 3.14159 * 0.5;
+	float latitude = wp.y * bendAmount + 3.14159 * 0.5;
+	float sinTheta = sin(longitude);
+	float cosTheta = cos(longitude);
+	float sinPhi = sin(latitude);
+	float cosPhi = cos(latitude);
+	float ux = cosTheta * sinPhi;
+	float uy = cosPhi;
+	float uz = sinTheta * sinPhi;
+	wp = vec4(
+    ux * bendRadius,
+		uy * bendRadius,
+		uz * bendRadius,
+		1);
+  v_position = viewProjection * wp;
+  v_normal = (worldInverseTranspose * vec4(normal, 0)).xyz;
+  v_surfaceToLight = lightWorldPos - (world * position).xyz;
+  v_surfaceToView = (viewInverse[3] - (world * position)).xyz;
+  gl_Position = v_position;
+}
+
+</script>
+<script id="imageSphereFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision highp float;
+#endif
+varying vec4 v_position;
+varying vec2 v_texCoord;
+varying vec3 v_normal;
+varying vec3 v_surfaceToLight;
+varying vec3 v_surfaceToView;
+
+uniform sampler2D diffuseSampler;
+
+vec4 lit(float l ,float h, float m) {
+  return vec4(1.0,
+              max(l, 0.0),
+              (l > 0.0) ? pow(max(0.0, h), m) : 0.0,
+              1.0);
+}
+void main() {
+  vec4 diffuse = texture2D(diffuseSampler, vec2(1.0 - v_texCoord.x, v_texCoord.y));
+  vec3 normal = normalize(v_normal);
+  vec3 surfaceToLight = normalize(v_surfaceToLight);
+  vec3 surfaceToView = normalize(v_surfaceToView);
+  vec3 halfVector = normalize(surfaceToLight + surfaceToView);
+  vec4 litR = lit(dot(normal, surfaceToLight),
+                    dot(normal, halfVector), 1.0);
+  gl_FragColor = vec4((diffuse * litR.y).rgb, diffuse.a);
+}
+</script>
+</html>
+
+
