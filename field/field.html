@@ -1,0 +1,798 @@
+<!--
+ * Copyright 2009, Google Inc.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ * notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ * copyright notice, this list of conditions and the following disclaimer
+ * in the documentation and/or other materials provided with the
+ * distribution.
+ *     * Neither the name of Google Inc. nor the names of its
+ * contributors may be used to endorse or promote products derived from
+ * this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+-->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+  "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>WebGL Field</title>
+<style>
+html, body {
+  width: 100%;
+  height: 100%;
+  border: 0px;
+  padding: 0px;
+  margin: 0px;
+  background-color: red;
+  font-family: sans-serif;
+}
+CANVAS {
+  background-color: gray;
+}
+#uiContainer {
+  z-index: 2;
+  padding: 1em;
+  position: absolute;
+  top: 10px;
+  right: 20px;
+  width: 250px;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  font-size: xx-small;
+}
+#ui {
+}
+#fpsContainer {
+  position: absolute;
+  top: 10px;
+  left: 20px;
+  z-index: 2;
+  color: white;
+}
+</style>
+<link type="text/css" href="../jquery-ui-1.8.2.custom/css/ui-lightness/jquery-ui-1.8.2.custom.css" rel="stylesheet" />
+<script type="text/javascript" src="../jquery-ui-1.8.2.custom/js/jquery-1.4.2.min.js"></script>
+<script type="text/javascript" src="../jquery-ui-1.8.2.custom/js/jquery-ui-1.8.2.custom.min.js"></script>
+<script type="text/javascript" src="../tdl/base.js"></script>
+<script type="text/javascript">
+tdl.require('tdl.buffers');
+tdl.require('tdl.fast');
+tdl.require('tdl.framebuffers');
+tdl.require('tdl.fps');
+tdl.require('tdl.log');
+tdl.require('tdl.math');
+tdl.require('tdl.models');
+tdl.require('tdl.particles');
+tdl.require('tdl.primitives');
+tdl.require('tdl.programs');
+tdl.require('tdl.textures');
+tdl.require('tdl.webgl');
+
+// globals
+var gl;                   // the gl context.
+var canvas;               // the canvas
+var math;                 // the math lib.
+var fast;                 // the fast math lib.
+var g_fpsTimer;           // object to measure frames per second;
+var g_logGLCalls = true;  // whether or not to log webgl calls
+var g_debug = false;      // whether or not to debug.
+var g_drawOnce = false;   // draw just one frame.
+var g_setCountElements = [];
+
+//g_drawOnce = true;
+//g_debug = true;
+
+var g_numGrass          = 50;
+
+var g = {
+  grassConst: {},
+  dofConst: {},
+  globals: {}};
+
+var g_ui = [
+  { obj: 'grassConst', name: 'bladeSpacing',     value: 0.06,  max:  0.5 },
+  { obj: 'grassConst', name: 'bladeWidth',       value: 0.075, max:  0.5 },
+  { obj: 'grassConst', name: 'topWidth',         value: 0.007, max:  0.5 },
+  { obj: 'grassConst', name: 'heightRange',      value: 0.1,   max:  0.5 },
+  { obj: 'grassConst', name: 'xWorldMult',       value: 1.0,   max:  5 },
+  { obj: 'grassConst', name: 'zWorldMult',       value: 1.0,   max:  5 },
+  { obj: 'grassConst', name: 'xTimeMult',        value: 1.0,   max:  5 },
+  { obj: 'grassConst', name: 'zTimeMult',        value: 2.01,  max:  5 },
+  { obj: 'grassConst', name: 'swayRange',        value: 0.2,   max:  1 },
+  { obj: 'grassConst', name: 'elevationPeriodX', value: 1.0,   max:  5 },
+  { obj: 'grassConst', name: 'elevationPeriodZ', value: 1.0,   max:  5 },
+  { obj: 'grassConst', name: 'elevationRange',   value: 0.4,   max:  3 },
+  { obj: 'globals',    name: 'targetHeight',     value: 1,     max:  5 },
+  { obj: 'globals',    name: 'targetRadius',     value: 1,     max:  5 },
+  { obj: 'globals',    name: 'eyeHeight',        value: 2,     max:  10 },
+  { obj: 'globals',    name: 'eyeRadius',        value: 3,     max:  10 },
+  { obj: 'globals',    name: 'eyeSpeed',         value: 0.1,   max:  1 },
+  { obj: 'dofConst',   name: 'dof',              value: 0.6,   max:  1 },
+  { obj: 'dofConst',   name: 'dofInnerRange',    value: 0.1,   max:  1 },
+  { obj: 'dofConst',   name: 'dofOuterRange',    value: 0.2,   max:  1 },
+  ];
+
+function ValidateNoneOfTheArgsAreUndefined(functionName, args) {
+  for (var ii = 0; ii < args.length; ++ii) {
+    if (args[ii] === undefined) {
+      tdl.error("undefined passed to gl." + functionName + "(" +
+          tdl.webgl.glFunctionArgsToString(functionName, args) + ")");
+    }
+  }
+}
+
+function Log(msg) {
+  if (g_logGLCalls) {
+    tdl.log(msg);
+  }
+}
+
+function LogGLCall(functionName, args) {
+  if (g_logGLCalls) {
+    ValidateNoneOfTheArgsAreUndefined(functionName, args)
+    tdl.log("gl." + functionName + "(" +
+            tdl.webgl.glFunctionArgsToString(functionName, args) + ")");
+  }
+}
+
+function createProgramFromTags(vertexTagId, fragmentTagId) {
+  return tdl.programs.loadProgram(
+      document.getElementById(vertexTagId).text,
+      document.getElementById(fragmentTagId).text);
+}
+
+/**
+ * Sets up Grass.
+ */
+function setupGrass() {
+  var textures = { };
+  var program = createProgramFromTags(
+      'grassVertexShader',
+      'grassFragmentShader');
+  var arrays = tdl.primitives.createPlane(1, 1, 1, 10);
+  tdl.primitives.reorient(arrays,
+      [1, 0, 0, 0,
+       0, 0, -1, 0,
+       0, 1, 0, 0,
+       0, 0.5, 0, 1]);
+  delete arrays.normal;
+  delete arrays.texCoord;
+  var numElements = arrays.position.numElements;
+  var blades = [arrays]
+  var across = 10;
+  for (var xx = 1; xx < across; ++xx) {
+    var a2 = tdl.primitives.clone(arrays);
+    blades[xx] = a2;
+  }
+  var arrays = tdl.primitives.concat(blades);
+  var blades = [arrays]
+  for (var zz = 1; zz < across; ++zz) {
+    var a2 = tdl.primitives.clone(arrays);
+    blades[zz] = a2;
+  }
+  var arrays = tdl.primitives.concat(blades);
+  var numBlades = across * across;
+  var bladeId = new tdl.primitives.AttribBuffer(
+      4, numElements * numBlades);
+  for (var xx = 0; xx < across; ++xx) {
+    for (var zz = 0; zz < across; ++zz) {
+      var r1 = Math.random();
+      var r2 = Math.random();
+      for (var jj = 0; jj < numElements; ++jj) {
+        bladeId.push([xx, zz, r1, r2]);
+      }
+    }
+  }
+  arrays.bladeId = bladeId;
+  return new tdl.models.Model(program, arrays, textures);
+}
+
+/**
+ * Sets up dofplane.
+ */
+function setupDofPlane(mainTexture, blurTexture) {
+  var textures = { mainSampler: mainTexture,
+                   blurSampler: blurTexture};
+  var program = createProgramFromTags(
+      'dofVertexShader',
+      'dofFragmentShader');
+  var arrays = tdl.primitives.createPlane(2, 2, 1, 1);
+  tdl.primitives.reorient(arrays,
+      [1, 0, 0, 0,
+       0, 0,-1, 0,
+       0, 1, 0, 0,
+       0, 0, 0, 1]);
+  delete arrays.normal;
+  return new tdl.models.Model(program, arrays, textures);
+}
+
+/**
+ * Sets up blur plane.
+ */
+function setupBlurPlane(mainTexture) {
+  var textures = {mainSampler: mainTexture};
+  var program = createProgramFromTags(
+      'blurVertexShader',
+      'blurFragmentShader');
+  var arrays = tdl.primitives.createPlane(2, 2, 1, 1);
+  tdl.primitives.reorient(arrays,
+      [1, 0, 0, 0,
+       0, 0,-1, 0,
+       0, 1, 0, 0,
+       0, 0, 0, 1]);
+  delete arrays.normal;
+  return new tdl.models.Model(program, arrays, textures);
+}
+
+/**
+ * Sets up Skybox.
+ */
+function setupSkybox() {
+  var textures = {
+    skybox: tdl.textures.loadTexture([
+        'assets/mid.png',
+        'assets/mid.png',
+        'assets/top.png',
+        'assets/bottom.png',
+        'assets/mid.png',
+        'assets/mid.png'])
+  };
+  var program = createProgramFromTags(
+      'skyboxVertexShader',
+      'skyboxFragmentShader');
+  var arrays = tdl.primitives.createPlane(2, 2, 1, 1);
+  delete arrays['normal'];
+  delete arrays['texCoord'];
+  tdl.primitives.reorient(arrays,
+      [1, 0, 0, 0,
+       0, 0, 1, 0,
+       0,-1, 0, 0,
+       0, 0, 0.99, 1]);
+  return new tdl.models.Model(program, arrays, textures);
+}
+
+/**
+ * Sets the count
+ */
+function setCount(elem, count) {
+  g_numGrass = count;
+  for (var ii = 0; ii < g_setCountElements.length; ++ii) {
+    g_setCountElements[ii].style.color = "gray";
+  }
+  elem.style.color = "red";
+}
+
+/**
+ * Sets up the count buttons.
+ */
+function setupCountButtons() {
+  var g_grassAmounts = [
+    1,
+    10,
+    100,
+    1000,
+  ];
+  for (var ii = 0; ii < g_grassAmounts.length; ++ii) {
+    var elem = document.getElementById("setCount" + ii);
+    if (!elem) {
+      break;
+    }
+    g_setCountElements.push(elem);
+    elem.onclick = function(elem, count) {
+      return function () {
+        setCount(elem, count);
+      }}(elem, g_grassAmounts[ii]);
+  }
+  setCount(document.getElementById('setCount2'),
+           g_grassAmounts[2]);
+}
+
+function initialize() {
+  math = tdl.math;
+  fast = tdl.fast;
+  canvas = document.getElementById("canvas");
+  g_fpsTimer = new tdl.fps.FPSTimer();
+
+  setupCountButtons();
+
+  gl = tdl.webgl.setupWebGL("3dcontainer", canvas);
+	if (!gl) {
+		return false;
+  }
+  if (g_debug) {
+    gl = tdl.webgl.makeDebugContext(gl, undefined, LogGLCall);
+  }
+
+  var mainFBO = tdl.framebuffers.createFramebuffer(canvas.width, canvas.height, true);
+  var horizontalBlurFBO = tdl.framebuffers.createFramebuffer(canvas.width / 4, canvas.height);
+  var verticalBlurFBO = tdl.framebuffers.createFramebuffer(canvas.width / 4, canvas.height / 4);
+  Log("--Setup Grass---------------------------------------");
+  var grass = setupGrass();
+  Log("--Setup Skybox---------------------------------------");
+  var skybox = setupSkybox();
+  Log("--Setup HorizontalBlurPlane---------------------------------------");
+  var horizontalBlurPlane = setupBlurPlane(mainFBO.texture);
+  Log("--Setup VerticalBlurPlane---------------------------------------");
+  var verticalBlurPlane = setupBlurPlane(horizontalBlurFBO.texture);
+  Log("--Setup DofPlane---------------------------------------");
+  var dofPlane = setupDofPlane(mainFBO.texture, verticalBlurFBO.texture);
+
+  var then = 0.0;
+  var clock = 0.0;
+  var fpsElem = document.getElementById("fps");
+
+  var projection = new Float32Array(16);
+  var view = new Float32Array(16);
+  var world = new Float32Array(16);
+  var worldInverse = new Float32Array(16);
+  var worldInverseTranspose = new Float32Array(16);
+  var viewProjection = new Float32Array(16);
+  var worldViewProjection = new Float32Array(16);
+  var viewInverse = new Float32Array(16);
+  var viewProjectionInverse = new Float32Array(16);
+  var eyePosition = new Float32Array(3);
+  var target = new Float32Array(3);
+  var up = new Float32Array([0,1,0]);
+  var lightWorldPos = new Float32Array(3);
+  var v3t0 = new Float32Array(3);
+  var v3t1 = new Float32Array(3);
+  var v3t2 = new Float32Array(3);
+  var v3t3 = new Float32Array(3);
+  var m4t0 = new Float32Array(16);
+  var m4t1 = new Float32Array(16);
+  var m4t2 = new Float32Array(16);
+  var m4t3 = new Float32Array(16);
+  var zero4 = new Float32Array(4);
+  var one4 = new Float32Array([1,1,1,1]);
+
+  // Sky uniforms.
+  var skyConst = {viewProjectionInverse: viewProjectionInverse};
+  var skyPer = {};
+
+  // dofPlane uniforms.
+  var dofPer = {};
+
+  // blurPlane uniforms.
+  var horizontalBlurConst = {
+      blurSize: new Float32Array([2.0 / canvas.width, 0])};
+  var verticalBlurConst = {
+      blurSize: new Float32Array([0, 2.0 / canvas.height])};
+  var blurPer = {};
+
+  // Grass uniforms.
+  g.grassConst.viewInverse = viewInverse;
+  g.grassConst.time = 0;
+
+  var grassPer = {
+    world: world,
+    worldViewProjection: worldViewProjection,
+    worldInverse: worldInverse,
+    worldInverseTranspose: worldInverseTranspose};
+
+  var frameCount = 0;
+  var intervalId = setInterval(render, 1000.0 / 70.0);
+  function render() {
+    ++frameCount;
+    if (g_drawOnce) {
+      clearInterval(intervalId);
+    }
+    var now = (new Date()).getTime() * 0.001;
+    var elapsedTime;
+    if(then == 0.0) {
+      elapsedTime = 0.0;
+    } else {
+      elapsedTime = now - then;
+    }
+    then = now;
+
+    g_fpsTimer.update(elapsedTime);
+    fpsElem.innerHTML = g_fpsTimer.averageFPS;
+
+    clock += elapsedTime;
+    var eyeClock = clock * g.globals.eyeSpeed;
+    eyePosition[0] = Math.sin(eyeClock) * g.globals.eyeRadius;
+    eyePosition[1] = g.globals.eyeHeight;
+    eyePosition[2] = Math.cos(eyeClock) * g.globals.eyeRadius;
+    target[0] = Math.sin(eyeClock + Math.PI) * g.globals.targetRadius;
+    target[1] = g.globals.targetHeight;
+    target[2] = Math.cos(eyeClock + Math.PI) * g.globals.targetRadius;
+
+    // Draw to main fbo.
+    mainFBO.bind();
+
+    gl.colorMask(true, true, true, true);
+    gl.depthMask(true);
+    gl.clearColor(0,0,0,0);
+    gl.clearDepth(1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+
+    gl.disable(gl.BLEND);
+    gl.depthFunc(gl.LESS);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    fast.matrix4.perspective(
+        projection,
+        math.degToRad(30),
+        canvas.clientWidth / canvas.clientHeight,
+        1,
+        5000);
+    fast.matrix4.lookAt(
+        view,
+        eyePosition,
+        target,
+        up);
+    fast.matrix4.mul(viewProjection, view, projection);
+    fast.matrix4.inverse(viewInverse, view);
+    fast.matrix4.inverse(viewProjectionInverse, viewProjection);
+
+    fast.matrix4.getAxis(v3t0, viewInverse, 0); // x
+    fast.matrix4.getAxis(v3t1, viewInverse, 1); // y;
+    fast.matrix4.getAxis(v3t2, viewInverse, 2); // z;
+    fast.mulScalarVector(v3t0, 1, v3t0);
+    fast.mulScalarVector(v3t1, 1, v3t1);
+    fast.mulScalarVector(v3t2, 1, v3t2);
+    fast.addVector(lightWorldPos, eyePosition, v3t0);
+    fast.addVector(lightWorldPos, lightWorldPos, v3t1);
+    fast.addVector(lightWorldPos, lightWorldPos, v3t2);
+//      view: view,
+//      projection: projection,
+//      viewProjection: viewProjection,
+
+    // Draw Skybox
+    skybox.drawPrep(skyConst);
+    skybox.draw(skyPer);
+
+    Log("--Draw grass---------------------------------------");
+    g.grassConst.time = clock;
+    grass.drawPrep(g.grassConst);
+    var across = Math.floor(Math.sqrt(g_numGrass));
+    var width = g.grassConst.bladeSpacing * 10;
+    var base = width * across * -0.5;
+    for (var zz = 0; zz < across; ++zz) {
+      for (var xx = 0; xx < across; ++xx) {
+        fast.matrix4.translation(world, [base + xx * width, 0, base + zz * width]),
+        fast.matrix4.mul(worldViewProjection, world, viewProjection);
+        fast.matrix4.inverse(worldInverse, world);
+        fast.matrix4.transpose(worldInverseTranspose, worldInverse);
+        grass.draw(grassPer);
+      }
+    }
+
+    // Draw to horizontal blur fbo.
+    horizontalBlurFBO.bind();
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+
+    // Draw HorizontalBlurPlane
+    horizontalBlurPlane.drawPrep(horizontalBlurConst);
+    horizontalBlurPlane.draw(blurPer);
+
+    // Draw to vertical blur fbo.
+    verticalBlurFBO.bind();
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+
+    // Draw VerticalBlurPlane
+    verticalBlurPlane.drawPrep(verticalBlurConst);
+    verticalBlurPlane.draw(blurPer);
+
+    // Draw to backbuffer.
+    verticalBlurFBO.unbind();
+    gl.colorMask(true, true, true, true);
+    gl.depthMask(true);
+    gl.clearColor(0,0,1,1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.DEPTH_TEST);
+
+    // Draw DofPlane
+    dofPlane.drawPrep(g.dofConst);
+    dofPlane.draw(dofPer);
+
+    // Set the alpha to 255.
+    gl.colorMask(false, false, false, true);
+    gl.clearColor(0,0,0,1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // turn off logging after 1 frame.
+    g_logGLCalls = false;
+  }
+  return true;
+}
+
+var g_event;
+var g_ui;
+
+function getParamId(id) {
+  return id.substr(6).replace(/(\w)/, function(m) {return m.toLowerCase() });
+}
+
+function setParam(event, ui, obj) {
+  var id = event.target.id;
+  var value = ui.value / 1000;
+  tdl.log(id + ": " + value);
+  obj[id] = value;
+}
+
+function getUIValue(obj, id) {
+  return obj[id] * 1000;
+}
+
+function setupSlider($, elem, ui, obj) {
+  var labelDiv = document.createElement('div');
+  labelDiv.appendChild(document.createTextNode(ui.name));
+  var sliderDiv = document.createElement('div');
+  sliderDiv.id = ui.name;
+  elem.appendChild(labelDiv);
+  elem.appendChild(sliderDiv);
+  $(sliderDiv).slider({
+    range: false,
+    step: 1,
+    max: ui.max * 1000,
+    value: getUIValue(obj, ui.name),
+    slide: function(event, ui) { setParam(event, ui, obj); }
+  });
+}
+
+$(function(){
+  var uiElem = document.getElementById('ui');
+  for (var ii = 0; ii < g_ui.length; ++ii) {
+    var ui = g_ui[ii];
+    var obj = g[ui.obj];
+    obj[ui.name] = ui.value;
+    var div = document.createElement('div');
+    setupSlider($, div, ui, obj);
+    uiElem.appendChild(div);
+  }
+
+  initialize();
+});
+
+
+</script>
+</head>
+<body>
+<div id="fpsContainer">
+  <div class="fps">fps: <span id="fps"></div>
+  <div>Grass</div>
+  <div id="setCount0">1</div>
+  <div id="setCount1">a few</div>
+  <div id="setCount2">many</div>
+  <div id="setCount3">lots</div>
+</div>
+<div id="uiContainer">
+<div id="ui"></div>
+</div>
+<div id="3dcontainer">
+<canvas id="canvas" width="1024" height="1024" style="width: 100%; height: 100%;"></canvas>
+</div>
+</body>
+<script id="grassVertexShader" type="text/something-not-javascript">
+uniform mat4 worldViewProjection;
+uniform mat4 world;
+uniform mat4 viewInverse;
+uniform float time;
+uniform float bladeWidth;
+uniform float topWidth;
+uniform float bladeSpacing;
+uniform float heightRange;
+uniform float horizontalRange;
+uniform float xWorldMult;
+uniform float zWorldMult;
+uniform float xTimeMult;
+uniform float zTimeMult;
+uniform float swayRange;
+uniform float elevationPeriodX;
+uniform float elevationPeriodZ;
+uniform float elevationRange;
+attribute vec4 position;
+attribute vec4 bladeId;
+varying vec4 v_color;
+
+float lerp1(float r1, float r2, float l) {
+  return r1 + (r2 - r1) * l;
+}
+
+void main() {
+  float height = position.y;
+  float lerp = height;
+
+  mat4 vm = mat4(
+      viewInverse[0],
+      viewInverse[1],
+      viewInverse[2],
+     vec4(0,0,0,1));
+  float width = lerp1(bladeWidth, topWidth, lerp);
+  vec4 pt = vm * vec4(
+      position.x * width,
+      0,
+      position.z * width,
+      1) +
+      vec4(0, position.y, 0, 0);
+  float xbase = bladeId.x;
+  float zbase = bladeId.y;
+  float rand1 = bladeId.z;
+  float rand2 = bladeId.w;
+  float hbase = time * sin((xbase + zbase) * 0.1);
+  float hsin  = sin(hbase);
+  float hcos  = cos(hbase);
+  float worldOff = world[3][0] * xWorldMult * world[3][2] * zWorldMult;
+  float xoff  = sin(time * xTimeMult + rand1 + worldOff + xbase * 0.3 + sin(zbase)) * swayRange;
+  float yoff  = 0.0;
+  float zoff  = sin(time * zTimeMult + rand2 + worldOff + zbase * 0.1 + cos(xbase) * 1.3) * swayRange;
+  float effect = 1.0 - cos(3.14159 * 0.5 * lerp) * 1.0;
+  vec4 p = vec4(
+      pt.x + xbase * bladeSpacing + xoff * effect + rand1 * bladeSpacing,
+      pt.y + yoff                                 + rand1 * heightRange,
+      pt.z + zbase * bladeSpacing + zoff * effect + rand1 * bladeSpacing,
+      1);
+  vec4 wp = world * p;
+  float elevationBasis = sin(wp.x * elevationPeriodX * wp.z * elevationPeriodZ);
+  float elevationBasis2 = sin((wp.x + bladeSpacing) * elevationPeriodX * (wp.z + bladeSpacing) * elevationPeriodZ);
+  vec3 p0 = vec3(0, elevationBasis * elevationRange, 0);
+  vec3 p1 = vec3(bladeSpacing, elevationBasis2 * elevationRange, bladeSpacing);
+  vec3 dir = normalize(p0 - p1);
+  vec3 perp = cross(dir, vec3(0,1,0));
+  vec3 normal = cross(dir, perp);
+  vec4 clipPosition = worldViewProjection * vec4(
+      p.x,
+      p.y + elevationBasis * elevationRange,
+      p.z,
+      1);
+  gl_Position = clipPosition;
+  vec3 lightDir = normalize(vec3(1, 3, 2)) * -1.0;
+  float l = dot(lightDir, normal);
+  vec3 color = vec3(
+      0.1 + rand2 * 0.2 + lerp * 0.2,
+      0.1 + (rand2 * 0.4 + 0.4) * lerp,
+      0.1 + rand2 * 0.2 + lerp * 0.2);
+
+  // encode the depth mix amount into the alpha channel
+  float depthMix = (clipPosition.z / clipPosition.w + 1.0) * 0.5;
+  v_color = vec4(color * l, depthMix);
+  //v_color = vec4(
+  //    0.0 + 0.0 * mod(xbase * 0.43, 1.0),
+  //    0.5 + 0.5 * mod((xbase + zbase) * 0.21, 1.0),
+  //    0.0 + 0.0 * mod(zbase * 0.69, 1.0),
+  //    1);
+}
+
+</script>
+<script id="grassFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision highp float;
+#endif
+varying vec4 v_color;
+
+void main() {
+  gl_FragColor = v_color;
+}
+</script>
+<!-- ===[ blur ]============================================== -->
+<script id="blurVertexShader" type="text/something-not-javascript">
+attribute vec4 position;
+attribute vec2 texCoord;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+void main() {
+  v_texCoord = texCoord;
+  gl_Position = position;
+}
+</script>
+<script id="blurFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision highp float;
+#endif
+varying vec2 v_texCoord;
+uniform vec2 blurSize;
+uniform sampler2D mainSampler;
+void main() {
+   vec4 sum = vec4(0.0);
+
+   sum += texture2D(mainSampler, vec2(v_texCoord.x - 4.0 * blurSize.x, v_texCoord.y - 4.0 * blurSize.y)) * 0.05;
+   sum += texture2D(mainSampler, vec2(v_texCoord.x - 3.0 * blurSize.x, v_texCoord.y - 3.0 * blurSize.y)) * 0.09;
+   sum += texture2D(mainSampler, vec2(v_texCoord.x - 2.0 * blurSize.x, v_texCoord.y - 2.0 * blurSize.y)) * 0.12;
+   sum += texture2D(mainSampler, vec2(v_texCoord.x - 1.0 * blurSize.x, v_texCoord.y - 1.0 * blurSize.y)) * 0.15;
+   sum += texture2D(mainSampler, vec2(v_texCoord.x                   , v_texCoord.y                   )) * 0.16;
+   sum += texture2D(mainSampler, vec2(v_texCoord.x + 1.0 * blurSize.x, v_texCoord.y + 1.0 * blurSize.y)) * 0.15;
+   sum += texture2D(mainSampler, vec2(v_texCoord.x + 2.0 * blurSize.x, v_texCoord.y + 2.0 * blurSize.y)) * 0.12;
+   sum += texture2D(mainSampler, vec2(v_texCoord.x + 3.0 * blurSize.x, v_texCoord.y + 3.0 * blurSize.y)) * 0.09;
+   sum += texture2D(mainSampler, vec2(v_texCoord.x + 4.0 * blurSize.x, v_texCoord.y + 4.0 * blurSize.y)) * 0.05;
+
+   gl_FragColor = sum;
+}
+</script>
+<!-- ===[ dof ]============================================== -->
+<script id="dofVertexShader" type="text/something-not-javascript">
+attribute vec4 position;
+attribute vec2 texCoord;
+varying vec4 v_position;
+varying vec2 v_texCoord;
+void main() {
+  v_texCoord = texCoord;
+  gl_Position = position;
+}
+</script>
+<script id="dofFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision highp float;
+#endif
+varying vec2 v_texCoord;
+uniform sampler2D mainSampler;
+uniform sampler2D blurSampler;
+uniform float dof;
+uniform float dofInnerRange;
+uniform float dofOuterRange;
+vec4 lerp4(vec4 a, vec4 b, float l) {
+  return a + (b - a) * l;
+}
+float lerp1(float a, float b, float l) {
+  return a + (b - a) * l;
+}
+void main() {
+  vec4 mainColor = texture2D(mainSampler, v_texCoord);
+  vec4 blurColor = texture2D(blurSampler, v_texCoord);
+  float depth = mainColor.a;
+  float mix = (abs(dof - depth) - dofInnerRange);
+  float mixAmount = 0.0;
+  float blurRange = dofOuterRange - dofInnerRange;
+  if (mix > blurRange) {
+    mixAmount = 1.0;
+  } else {
+    mixAmount = mix / blurRange;
+  }
+  vec4 color = lerp4(mainColor, blurColor, mixAmount);
+  // Uncomment next line to show depth.
+  //color = color * 0.0001 + vec4(mainColor.aaa, 1) * 0.9999;
+  // Uncomment next line to show mix amount/
+  //color = color * 0.0001 + vec4(mixAmount, mixAmount, mixAmount, 1);
+  gl_FragColor = color;
+}
+</script>
+<!-- ===[ SkyBox ]============================================== -->
+<script id="skyboxVertexShader" type="text/something-not-javascript">
+attribute vec4 position;
+varying vec4 v_position;
+void main() {
+  v_position = position;
+  gl_Position = position;
+}
+</script>
+<script id="skyboxFragmentShader" type="text/something-not-javascript">
+#ifdef GL_ES
+precision highp float;
+#endif
+uniform samplerCube skybox;
+uniform mat4 viewProjectionInverse;
+varying vec4 v_position;
+void main() {
+  vec4 t = (viewProjectionInverse * v_position);
+  vec4 color = textureCube(
+      skybox,
+      normalize(t.xyz / t.w));
+  gl_FragColor = color;
+}
+</script>
+</html>
+
+
