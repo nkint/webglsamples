@@ -56,6 +56,7 @@ CANVAS {
   background: rgba(0,0,0,0.5);
   color: white;
   font-size: xx-small;
+  font-family: sans-serif;
 }
 #ui {
 }
@@ -68,6 +69,9 @@ CANVAS {
   z-index: 2;
   color: white;
   font-family: sans-serif;
+}
+.accordion {
+  //border: 1px solid red;
 }
 </style>
 <link type="text/css" href="../jquery-ui-1.8.2.custom/css/ui-lightness/jquery-ui-1.8.2.custom.css" rel="stylesheet" />
@@ -110,34 +114,43 @@ var g_id = 0;
 var g = {
   p: {
   },
+  ground: {
+  },
   globals: {
   }
 };
 
 var g_ui = [
-  { obj: 'globals', name: 'targetHeight',  type: 'float',  value: 1,            max:  5 },
-  { obj: 'globals', name: 'targetRadius',  type: 'float',  value: 1,            max:  5 },
-  { obj: 'globals', name: 'eyeHeight',     type: 'float',  value: 2,            max:  10 },
-  { obj: 'globals', name: 'eyeRadius',     type: 'float',  value: 3,            max:  10 },
-  { obj: 'globals', name: 'eyeSpeed',      type: 'float',  value: 0.1,          max:  1 },
-  { obj: 'p',      name: 'numParticles',   type: 'int',    value: 20,           max: 200,  min: 1 },
-//{ obj: 'p',      name: 'numFrames',      type: 'int',    value: 1,            max: }, Need image selector. Compute from image.
-  { obj: 'p',      name: 'frameDuration',  type: 'dur',    value: 0.1,          max: 1 },
-  { obj: 'p',      name: 'frameStart',     type: 'intR',   value: 0,            max: 32 },           // compute max from image?
-  { obj: 'p',      name: 'timeRange',      type: 'dur',    value: 2,            max: 10 },           // special. 0 = 99999999
-//  { obj: 'p',      name: 'startTime',      type: 'dur',    value: null,         max: },              // need flag. (a) spread over range (b) random over range (c) in specified time range
-  { obj: 'p',      name: 'lifeTime',       type: 'durR',   value: 2,            max: 10 },
-  { obj: 'p',      name: 'startSize',      type: 'floatR', value: 0.5,          max: 5 },
-  { obj: 'p',      name: 'endSize',        type: 'floatR', value: 0.9,          max: 5 },
-  { obj: 'p',      name: 'position',       type: 'vec3R',  value: [0, 0, 0],    max: [10, 10, 10]},  // Needs to go negative, actually needs manipulator
-  { obj: 'p',      name: 'velocity',       type: 'vec3R',  value: [0, 0.6, 0],  max: [5, 5, 5]},     // Needs to go negative, actually needs manipulator
-  { obj: 'p',      name: 'acceleration',   type: 'vec3R',  value: [0, 0, 0],    max: [5, 5, 5]},     // Needs to go negative, actually needs manipulator
-  { obj: 'p',      name: 'spinStart',      type: 'floatR', value: 0,            max: 5 },
-  { obj: 'p',      name: 'spinSpeed',      type: 'floatR', value: 0,            max: 5 },
-  { obj: 'p',      name: 'colorMult',      type: 'colorR', value: [1, 1, 1, 1], max: [1, 1, 1, 1]},  // range is strange here
-  { obj: 'p',      name: 'worldVelocity',  type: 'vec3R',  value: [0, 0, 0],    max: [5, 5, 5]},
-  { obj: 'p',      name: 'billboard',      type: 'bool',   value: true                           },
-//{ obj: 'p',  name: 'orientation ',       type: 'rot',    value: '[0, 0, 0, 1]', max: },            // needs flag
+  { section: 'globals' },
+  { obj: 'globals', name: 'targetHeight',     type: 'float',  value: 1,            max:  5 },
+  { obj: 'globals', name: 'targetRadius',     type: 'float',  value: 1,            max:  5 },
+  { obj: 'globals', name: 'eyeHeight',        type: 'float',  value: 2,            max:  10 },
+  { obj: 'globals', name: 'eyeRadius',        type: 'float',  value: 3,            max:  10 },
+  { obj: 'globals', name: 'eyeSpeed',         type: 'float',  value: 0.1,          max:  4 },
+  { section: 'ground' },
+  { obj: 'ground',  name: 'color1',           type: 'color',  value: [0.4, 0.5, 0.5, 1], max: [1, 1, 1, 1]},
+  { obj: 'ground',  name: 'color2',           type: 'color',  value: [0.6, 0.8, 0.8, 1], max: [1, 1, 1, 1]},
+  { obj: 'ground',  name: 'checkSize',        type: 'float',  value: 10,           max:  20 },
+  { section: 'particles' },
+  { obj: 'p',      name: 'numParticles',      type: 'int',    value: 20,           max: 400,  min: 1 },
+//{ obj: 'p',      name: 'numFrames',         type: 'int',    value: 1,            max: }, Need image selector. Compute from image.
+  { obj: 'p',      name: 'frameDuration',     type: 'dur',    value: 0.1,          max: 1 },
+  { obj: 'p',      name: 'frameStart',        type: 'intR',   value: 0,            max: 32 },           // compute max from image?
+  { obj: 'p',      name: 'timeRange',         type: 'dur',    value: 2,            max: 10 },           // special. 0 = 99999999
+//{ obj: 'p',      name: 'startTime',         type: 'dur',    value: null,         max: },              // need flag. (a) spread over range (b) random over range (c) in specified time range
+  { obj: 'p',      name: 'lifeTime',          type: 'durR',   value: 2,            max: 10 },
+  { obj: 'p',      name: 'startSize',         type: 'floatR', value: 0.5,          max: 5 },
+  { obj: 'p',      name: 'endSize',           type: 'floatR', value: 0.9,          max: 5 },
+  { obj: 'p',      name: 'position',          type: 'vec3R',  value: [0, 0, 0],    max: [2, 2, 2]},  // Needs to go negative, actually needs manipulator
+  { obj: 'p',      name: 'velocity',          type: 'vec3R',  value: [0, 0.6, 0],  max: [2, 2, 2], range: [0.15, 0.15, 0.15]},     // Needs to go negative, actually needs manipulator
+  { obj: 'p',      name: 'acceleration',      type: 'vec3R',  value: [0, 0, 0],    max: [2, 2, 2]},     // Needs to go negative, actually needs manipulator
+  { obj: 'p',      name: 'spinStart',         type: 'floatR', value: 0,            max: 5 },
+  { obj: 'p',      name: 'spinSpeed',         type: 'floatR', value: 0,            max: 5 },
+  { obj: 'p',      name: 'colorMult',         type: 'colorR', value: [1, 1, 1, 1], max: [1, 1, 1, 1]},  // range is strange here
+  { obj: 'p',      name: 'worldVelocity',     type: 'vec3',   value: [0, 0, 0],    max: [2, 2, 2]},
+  { obj: 'p',      name: 'worldAcceleration', type: 'vec3',   value: [0, -0.2, 0], max: [2, 2, 2]},
+  { obj: 'p',      name: 'billboard',         type: 'bool',   value: true                           },
+//{ obj: 'p',  name: 'orientation ',          type: 'rot',    value: '[0, 0, 0, 1]', max: },            // needs flag
   ];
 
 //g_drawOnce = true;
@@ -341,13 +354,9 @@ function initialize() {
   var one4 = new Float32Array([1,1,1,1]);
 
   // Ground uniforms.
-  var groundConst = {
-    viewInverse: viewInverse,
-    lightWorldPos: lightWorldPos,
-    lightColor: one4,
-    color1: new Float32Array([0.4, 0.5, 0.5, 1]),
-    color2: new Float32Array([0.6, 0.8, 0.8, 1]),
-		checkSize: 10};
+  g.ground.viewInverse = viewInverse;
+  g.ground.lightWorldPos = lightWorldPos;
+  g.ground.lightColor = one4;
   var groundPer = {
     world: world,
     worldViewProjection: worldViewProjection,
@@ -355,6 +364,7 @@ function initialize() {
     worldInverseTranspose: worldInverseTranspose};
 
   var frameCount = 0;
+  var cameraClock = 0;
   var intervalId = setInterval(render, 1000.0 / 70.0);
   function render() {
     ++frameCount;
@@ -374,12 +384,13 @@ function initialize() {
     fpsElem.innerHTML = g_fpsTimer.averageFPS;
 
     clock += elapsedTime;
-    eyePosition[0] = Math.sin(clock * g.globals.eyeSpeed) * g.globals.eyeRadius;
+    cameraClock += elapsedTime * g.globals.eyeSpeed;
+    eyePosition[0] = Math.sin(cameraClock) * g.globals.eyeRadius;
     eyePosition[1] = g.globals.eyeHeight;
-    eyePosition[2] = Math.cos(clock * g.globals.eyeSpeed) * g.globals.eyeRadius;
-    target[0] = Math.sin(clock * g.globals.eyeSpeed + Math.PI) * g.globals.targetRadius;
+    eyePosition[2] = Math.cos(cameraClock) * g.globals.eyeRadius;
+    target[0] = Math.sin(cameraClock + Math.PI) * g.globals.targetRadius;
     target[1] = g.globals.targetHeight;
-    target[2] = Math.cos(clock * g.globals.eyeSpeed + Math.PI) * g.globals.targetRadius;
+    target[2] = Math.cos(cameraClock + Math.PI) * g.globals.targetRadius;
 
     gl.colorMask(true, true, true, true);
     gl.depthMask(true);
@@ -423,7 +434,7 @@ function initialize() {
 //      viewProjection: viewProjection,
 
     Log("--Draw Ground---------------------------------------");
-    ground.drawPrep(groundConst);
+    ground.drawPrep(g.ground);
     fast.matrix4.translation(world, [0, 0, 0]),
     fast.matrix4.mul(worldViewProjection, world, viewProjection);
     fast.matrix4.inverse(worldInverse, world);
@@ -449,20 +460,20 @@ function getParamId(id) {
   return id.substr(6).replace(/(\w)/, function(m) {return m.toLowerCase() });
 }
 
-function setFloatParam(event, jqui, ui, obj) {
+function setFloatParam(event, jqui, ui, obj, valueDiv) {
   var value = jqui.value / 1000;
-  tdl.log(ui.name, ": ", value);
+  valueDiv.innerText = value;
   obj[ui.name] = value;
   if (obj == g.p) {
     updateCurrentParticleEmitter();
   }
 }
 
-function setFloatRParam(event, jqui, ui, obj) {
+function setFloatRParam(event, jqui, ui, obj, valueDiv) {
   var minValue = jqui.values[0] / 1000;
   var maxValue = jqui.values[1] / 1000;
   var range = maxValue - minValue;
-  tdl.log(ui.name, ": ", minValue, maxValue);
+  valueDiv.innerText = "[" + minValue + "," + maxValue + "]";
 
   obj[ui.name] = minValue + range * 0.5;
   obj[ui.name + 'Range'] = range;
@@ -471,20 +482,62 @@ function setFloatRParam(event, jqui, ui, obj) {
   }
 }
 
-function setIntParam(event, jqui, ui, obj) {
+var g_axisNames = ['x', 'y', 'z'];
+
+function setVec3Param(event, jqui, ui, obj, ii, valueDiv) {
+  var max = ui.max[ii];
+  var value = jqui.value / 1000 - max;
+  var o = obj[ui.name];
+  o[ii] = value;
+  valueDiv.innerText = "[" + o[0].toFixed(3) + "," + o[1].toFixed(3) + "," + o[2].toFixed(3) + "]";
+  if (obj == g.p) {
+    updateCurrentParticleEmitter();
+  }
+}
+
+function setVec3RParam(event, jqui, ui, obj, ii, valueDiv) {
+  var max = ui.max[ii];
+  var minValue = jqui.values[0] / 1000 - max;
+  var maxValue = jqui.values[1] / 1000 - max;
+  var range = maxValue - minValue;
+
+  var o = obj[ui.name];
+  var or = obj[ui.name + 'Range'];
+  o[ii] = minValue + range * 0.5;
+  or[ii] = range;
+
+  var min = [
+    o[0] - or[0] * 0.5,
+    o[1] - or[1] * 0.5,
+    o[2] - or[2] * 0.5,
+  ];
+  var max = [
+    o[0] + or[0] * 0.5,
+    o[1] + or[1] * 0.5,
+    o[2] + or[2] * 0.5,
+  ];
+  valueDiv.innerText = "[" + min[0].toFixed(3) + "," + min[1].toFixed(3) + "," + min[2].toFixed(3) + "]-" +
+                       "[" + max[0].toFixed(3) + "," + max[1].toFixed(3) + "," + max[2].toFixed(3) + "]";
+
+  if (obj == g.p) {
+    updateCurrentParticleEmitter();
+  }
+}
+
+function setIntParam(event, jqui, ui, obj, valueDiv) {
   var value = Math.floor(jqui.value / 1000);
-  tdl.log(ui.name, "(i): ", value);
+  valueDiv.innerText = value;
   obj[ui.name] = value;
   if (obj == g.p) {
     updateCurrentParticleEmitter();
   }
 }
 
-function setIntRParam(event, jqui, ui, obj) {
+function setIntRParam(event, jqui, ui, obj, valueDiv) {
   var minValue = Math.floor(jqui.values[0] / 1000);
   var maxValue = Math.floor(jqui.values[1] / 1000);
   var range = maxValue - minValue;
-  tdl.log(ui.name, ": ", minValue, maxValue);
+  valueDiv.innerText = "[" + minValue + "," + maxValue + "]";
 
   obj[ui.name] = minValue + Math.floor(range * 0.5);
   obj[ui.name + 'Range'] = range;
@@ -493,11 +546,67 @@ function setIntRParam(event, jqui, ui, obj) {
   }
 }
 
-function setColorRParam(event, rgba, ui, obj) {
+function rgba255ToCSSrgba(rgba) {
+  return 'rgba(' +
+      Math.round(rgba.r) + ',' +
+      Math.round(rgba.g) + ',' +
+      Math.round(rgba.b) + ',' +
+      Math.round(rgba.a / 255) + ')';
+}
+
+function rgba01ToCSSrgba(rgba) {
+  return 'rgba(' +
+      Math.round(rgba.r * 255) + ',' +
+      Math.round(rgba.g * 255) + ',' +
+      Math.round(rgba.b * 255) + ',' +
+      Math.round(rgba.a) + ')';
+}
+
+//function setColorRParam(event, rgba, ui, obj) {
+//  var color = [rgba.r / 255.0, rgba.g / 255.0, rgba.b / 255.0, rgba.a / 255.0];
+//  tdl.log(ui.name, ": ", color);
+//  obj[ui.name] = color;
+//  if (obj == g.p) {
+//    updateCurrentParticleEmitter();
+//  }
+//}
+
+var g_colorChannelNames = ['r', 'g', 'b', 'a'];
+function setColorRParam(event, jqui, ui, obj, ii, valueDiv) {
+  var minValue = jqui.values[0] / 1000;
+  var maxValue = jqui.values[1] / 1000;
+  var range = maxValue - minValue;
+
+  var o = obj[ui.name];
+  var or = obj[ui.name + 'Range'];
+  o[ii] = minValue + range * 0.5;
+  or[ii] = range;
+
+  var min = [
+    o[0] - or[0] * 0.5,
+    o[1] - or[1] * 0.5,
+    o[2] - or[2] * 0.5,
+    o[3] - or[3] * 0.5,
+  ];
+  var max = [
+    o[0] + or[0] * 0.5,
+    o[1] + or[1] * 0.5,
+    o[2] + or[2] * 0.5,
+    o[3] + or[3] * 0.5,
+  ];
+  valueDiv.innerText = "[" + min[0].toFixed(2) + "," + min[1].toFixed(2) + "," + min[2].toFixed(2) + "," + min[3].toFixed(2)  + "]-" +
+                       "[" + max[0].toFixed(2) + "," + max[1].toFixed(2) + "," + max[2].toFixed(2) + "," + max[3].toFixed(2)  + "]";
+
+  if (obj == g.p) {
+    updateCurrentParticleEmitter();
+  }
+}
+
+
+function setColorParam(event, rgba, ui, obj, valueDiv) {
   var color = [rgba.r / 255.0, rgba.g / 255.0, rgba.b / 255.0, rgba.a / 255.0];
-  tdl.log(ui.name, ": ", color);
   obj[ui.name] = color;
-//  obj[ui.name + 'Range'] = range;
+  valueDiv.innerText = "[" + color[0].toFixed(2) + "," + color[1].toFixed(2) + "," + color[2].toFixed(2) + "," + color[3].toFixed(2)  + "]";
   if (obj == g.p) {
     updateCurrentParticleEmitter();
   }
@@ -511,96 +620,99 @@ function setupWidget($, elem, ui, obj) {
   var widgets = {
     // Duration
     'dur': {
-      makeWidget: function($, elem, ui, obj) {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
         $(elem).slider({
           range: false,
           step: 1,
           min: (ui.min ? ui.min * 1000 : 0),
           max: ui.max * 1000,
           value: getUIValue(obj, ui.name),
-          slide: function(ui, obj) {
+          slide: function(ui, obj, valueDiv) {
             return function(event, jqui) {
-              setFloatParam(event, jqui, ui, obj);
+              setFloatParam(event, jqui, ui, obj, valueDiv);
             };
-          } (ui, obj),
+          } (ui, obj, valueDiv),
         });
       },
     },
     // Duration Random
     'durR': {
-      makeWidget: function($, elem, ui, obj) {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
         var max = ui.max * 1000;
+        var halfRange = (ui.range ? ui.range : 0) * 1000 * 0.5;
         var value = getUIValue(obj, ui.name);
         $(elem).slider({
           range: true,
           step: 1,
           min: (ui.min ? ui.min * 1000 : 0),
           max: max,
-          values: [value, value],
-          slide: function(ui, obj) {
+          values: [value - halfRange, value + halfRange],
+          slide: function(ui, obj, valueDiv) {
             return function(event, jqui) {
-              setFloatRParam(event, jqui, ui, obj);
+              setFloatRParam(event, jqui, ui, obj, valueDiv);
             };
-          }(ui, obj),
+          }(ui, obj, valueDiv),
         });
       }
     },
     // Int
     'int': {
-      makeWidget: function($, elem, ui, obj) {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
         $(elem).slider({
           range: false,
           step: 1,
           min: (ui.min ? ui.min * 1000 : 0),
           max: ui.max * 1000,
           value: getUIValue(obj, ui.name),
-          slide: function(ui, obj) {
+          slide: function(ui, obj, valueDiv) {
             return function(event, jqui) {
-              setIntParam(event, jqui, ui, obj);
+              setIntParam(event, jqui, ui, obj, valueDiv);
             };
-          } (ui, obj),
+          } (ui, obj, valueDiv),
         });
       },
     },
     // Int random
     'intR': {
-      makeWidget: function($, elem, ui, obj) {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
+        var halfRange = (ui.range ? ui.range : 0) * 1000 * 0.5;
         var max = ui.max * 1000;
         var value = getUIValue(obj, ui.name);
         $(elem).slider({
           range: true,
           step: 1,
           min: (ui.min ? ui.min * 1000 : 0),
-          max: max,
-          values: [value, value],
-          slide: function(ui, obj) {
+          max: ui.max * 1000,
+          values: [value - halfRange, value + halfRange],
+          slide: function(ui, obj, valueDiv) {
             return function(event, jqui) {
-              setIntRParam(event, jqui, ui, obj);
+              setIntRParam(event, jqui, ui, obj, valueDiv);
             };
-          }(ui, obj),
+          }(ui, obj, valueDiv),
         });
       },
     },
     // Float
     'float': {
-			makeWidget: function($, elem, ui, obj) {
+			makeWidget: function($, elem, ui, obj, valueDiv) {
         $(elem).slider({
           range: false,
           step: 1,
           min: (ui.min ? ui.min * 1000 : 0),
           max: ui.max * 1000,
           value: getUIValue(obj, ui.name),
-          slide: function(ui, obj) {
+          slide: function(ui, obj, valueDiv) {
             return function(event, jqui) {
-              setFloatParam(event, jqui, ui, obj);
+              setFloatParam(event, jqui, ui, obj, valueDiv);
             };
-          } (ui, obj),
+          } (ui, obj, valueDiv),
         });
       },
     },
     // Float random
     'floatR': {
-      makeWidget: function($, elem, ui, obj) {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
+        var halfRange = (ui.range ? ui.range : 0) * 1000 * 0.5;
         var max = ui.max * 1000;
         var value = getUIValue(obj, ui.name);
         $(elem).slider({
@@ -608,73 +720,193 @@ function setupWidget($, elem, ui, obj) {
           step: 1,
           min: (ui.min ? ui.min * 1000 : 0),
           max: max,
-          values: [value, value],
-          slide: function(ui, obj) {
+          values: [value - halfRange, value + halfRange],
+          slide: function(ui, obj, valueDiv) {
             return function(event, jqui) {
-              setFloatRParam(event, jqui, ui, obj);
+              setFloatRParam(event, jqui, ui, obj, valueDiv);
             };
-          }(ui, obj),
+          }(ui, obj, valueDiv),
         });
+      }
+    },
+    // Vec3
+    'vec3': {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
+        for (var ii = 0; ii < 3; ++ii) {
+          var div = document.createElement('div');
+          var max = ui.max[ii] * 1000;
+          var value = ui.value[ii] * 2000 + max; //getUIValue(obj, ui.name)[ii];
+          $(div).slider({
+            range: false,
+            step: 1,
+            min: 0,
+            max: max * 2,
+            value: value,
+            slide: function(ui, obj, ii, valueDiv) {
+              return function(event, jqui) {
+                setVec3Param(event, jqui, ui, obj, ii, valueDiv);
+              };
+            }(ui, obj, ii, valueDiv),
+          });
+          elem.appendChild(div);
+        }
       }
     },
     // Vec3 random
     'vec3R': {
-      makeWidget: function($, elem, ui, obj) {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
+        var ranges = ui.range ? ui.range : [0,0,0];
+        obj[ui.name + 'Range'] = ranges;
+        for (var ii = 0; ii < 3; ++ii) {
+          var div = document.createElement('div');
+          var max = ui.max[ii] * 1000;
+          var base = ui.value[ii] * 2000 + max;
+          var value = base - ranges[ii] * 1000; //getUIValue(obj, ui.name)[ii];
+          var value2 = base + ranges[ii] * 1000;
+          $(div).slider({
+            range: true,
+            step: 1,
+            min: 0,
+            max: max * 2,
+            values: [value, value2],
+            slide: function(ui, obj, ii, valueDiv) {
+              return function(event, jqui) {
+                setVec3RParam(event, jqui, ui, obj, ii, valueDiv);
+              };
+            }(ui, obj, ii, valueDiv),
+          });
+          elem.appendChild(div);
+        }
+      },
+    },
+    // Color
+    'color': {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
+        var div = document.createElement('div');
+        div.style.width = "100%";
+        div.style.height = "1em";
+        var color = {
+          r: Math.round(ui.value[0] * 255),
+          g: Math.round(ui.value[1] * 255),
+          b: Math.round(ui.value[2] * 255),
+          a: Math.round(ui.value[3] * 255)
+        };
+        div.style.backgroundColor = rgba255ToCSSrgba(color);
+        $(div).ColorPicker({
+          color: color,
+          onChange: function(ui, obj, colorDiv, valueDiv) {
+            return function(hsb, hex, rgba) {
+              // TODO(gman): this colorDiv should move inside the widget.
+              colorDiv.style.backgroundColor = rgba255ToCSSrgba(rgba);
+              setColorParam(event, rgba, ui, obj, valueDiv);
+            };
+          }(ui, obj, div, valueDiv),
+        });
+        elem.appendChild(div);
       },
     },
     // Color Random
     'colorR': {
-      makeWidget: function($, elem, ui, obj) {
-        var input = document.createElement('input');
-        input.type = "text";
-        input.maxlength = 8;
-        input.size = 8;
-        input.value = "00ff00ff"
-        $(input).ColorPicker({
-          color: {
-            r: Math.round(ui.value[0] * 255),
-            g: Math.round(ui.value[1] * 255),
-            b: Math.round(ui.value[2] * 255),
-            a: Math.round(ui.value[3] * 255)
-          },
-          onChange: function(ui, obj) {
-            return function(hsb, hex, rgba) {
-              setColorRParam(event, rgba, ui, obj);
-            };
-          }(ui, obj),
-        });
-        elem.appendChild(input);
+      makeWidget: function($, elem, ui, obj, valueDiv) {
+        var ranges = ui.range ? ui.range : [0,0,0,0];
+        obj[ui.name + 'Range'] = ranges;
+        for (var ii = 0; ii < 4; ++ii) {
+          var div = document.createElement('div');
+          var max = ui.max[ii] * 1000;
+          var base = ui.value[ii] * 1000;
+          var value = base - ranges[ii] * 1000; //getUIValue(obj, ui.name)[ii];
+          var value2 = base + ranges[ii] * 1000;
+          $(div).slider({
+            range: true,
+            step: 1,
+            min: 0,
+            max: max,
+            values: [value, value2],
+            slide: function(ui, obj, ii, valueDiv) {
+              return function(event, jqui) {
+                setColorRParam(event, jqui, ui, obj, ii, valueDiv);
+              };
+            }(ui, obj, ii, valueDiv),
+          });
+          elem.appendChild(div);
+        }
       },
+      //makeWidget: function($, elem, ui, obj, valueDiv) {
+      //  var div = document.createElement('div');
+      //  div.style.width = "100%";
+      //  div.style.height = "1em";
+      //  var color = {
+      //    r: Math.round(ui.value[0] * 255),
+      //    g: Math.round(ui.value[1] * 255),
+      //    b: Math.round(ui.value[2] * 255),
+      //    a: Math.round(ui.value[3] * 255)
+      //  };
+      //  div.style.backgroundColor = rgba255ToCSSrgba(color);
+      //  $(div).ColorPicker({
+      //    color: color,
+      //    onChange: function(ui, obj, colorDiv, valueDiv) {
+      //      return function(hsb, hex, rgba) {
+      //        // TODO(gman): this colorDiv should move inside the widget.
+      //        colorDiv.style.backgroundColor = rgba255ToCSSrgba(rgba);
+      //        setColorRParam(event, rgba, ui, obj, valueDiv);
+      //      };
+      //    }(ui, obj, div, valueDiv),
+      //  });
+      //  elem.appendChild(div);
+      //},
     },
     // Bool
     'bool': {
-      makeWidget: function($, elem, ui, obj) {
+      makeWidget: function($, elem, ui, obj, valueDiv) {
       },
     }
   };
 
-  var labelDiv = document.createElement('div');
+  var textDiv = document.createElement('div');
+  var labelDiv = document.createElement('span');
   labelDiv.appendChild(document.createTextNode(ui.name));
+  var valueDiv = document.createElement('span');
+  valueDiv.appendChild(document.createTextNode("-"));
+  valueDiv.style.position = "absolute";
+  valueDiv.style.right = "10px";
   var widgetDiv = document.createElement('div');
   widgetDiv.id = "widget" + g_id;
   g_idToWidgetMap[g_id] = { ui: ui, obj: obj };
   ++g_id;
-  tdl.log("type", ui.type);
-  elem.appendChild(labelDiv);
+  //tdl.log("type", ui.type);
+  textDiv.appendChild(labelDiv);
+  textDiv.appendChild(valueDiv);
+  elem.appendChild(textDiv);
   elem.appendChild(widgetDiv);
- 	widgets[ui.type].makeWidget($, widgetDiv, ui, obj)
+ 	widgets[ui.type].makeWidget($, widgetDiv, ui, obj, valueDiv)
 }
 
 $(function(){
   // Setup UI.
   var uiElem = document.getElementById('ui');
+  var outerElem = uiElem;
+  var sections = [];
   for (var ii = 0; ii < g_ui.length; ++ii) {
     var ui = g_ui[ii];
-    var obj = g[ui.obj];
-    obj[ui.name] = ui.value;
     var div = document.createElement('div');
-    setupWidget($, div, ui, obj);
-    uiElem.appendChild(div);
+    if (ui.section) {
+      tdl.log("make:", ui.section);
+      var html = '<div class="accordion"><h3><a href="#">' + ui.section + '</a></h3><div></div></div>';
+      var p = $(html);
+      p.find('h3').click(function() { $(this).next().toggle('slow'); return false; }).next().hide();
+      sections.push(p);
+      uiElem = p.find('div').get()[0];
+      //uiElem = innerDiv;
+    } else {
+      var obj = g[ui.obj];
+      obj[ui.name] = ui.value;
+      setupWidget($, div, ui, obj);
+      uiElem.appendChild(div);
+    }
+  }
+
+  for (var ii = 0; ii < sections.length; ++ii) {
+    sections[ii].appendTo(outerElem);
   }
 
   initialize();
