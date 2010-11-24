@@ -13,7 +13,7 @@ cd $RELSCRIPTDIR
 SCRIPTDIR=`pwd`
 cd $CWD
 
-lg-sudo-bg ntpdate -u pool.ntp.org
+#lg-sudo-bg ntpdate -u pool.ntp.org
 
 function doit {
   ssh -x $GUSER@$1 "export DISPLAY=:0.0 ; ~/chrome/chrome-linux/chrome --kiosk --no-first-run --enable-webl --enable-accelerated-compositing http://$GDOMAIN/$GURL{\\\"net\\\":{\\\"id\\\":$2\,\\\"port\\\":$GPORT\,\\\"msg\\\":\\\"$3\\\"}}" &
